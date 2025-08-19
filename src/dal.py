@@ -357,3 +357,61 @@ class DAL:
             cur = conn.execute("DELETE FROM ticket WHERE id=?", (ticket_id,))
             conn.commit()
             return cur.rowcount > 0
+
+    # ----------------------------
+    # Reports / Advanced Queries
+    # ----------------------------
+
+    def top_passengers(self, limit=10):
+        """Return passengers ranked by most bookings"""
+        with connect(self.db_path) as conn:
+            cur = conn.execute("""
+                SELECT p.id, p.name, p.email, COUNT(b.id) AS total_bookings
+                FROM passenger p
+                JOIN booking b ON p.id = b.passenger_id
+                GROUP BY p.id, p.name, p.email
+                ORDER BY total_bookings DESC
+                LIMIT ?
+            """, (limit,))
+            return [dict(id=row[0], name=row[1], email=row[2], total_bookings=row[3]) for row in cur.fetchall()]
+
+    def revenue_rankings(self, limit=10):
+        """Return flights ranked by highest revenue"""
+        with connect(self.db_path) as conn:
+            cur = conn.execute("""
+                SELECT f.id, f.code, SUM(b.price) AS total_revenue, COUNT(b.id) AS total_bookings
+                FROM flight f
+                JOIN booking b ON f.id = b.flight_id
+                GROUP BY f.id, f.code
+                ORDER BY total_revenue DESC
+                LIMIT ?
+            """, (limit,))
+            return [dict(id=row[0], code=row[1], total_revenue=row[2], total_bookings=row[3]) for row in cur.fetchall()]
+
+    def route_load_factors(self, limit=10):
+        """Return routes ranked by load factor (booked seats ÷ aircraft capacity)"""
+        with connect(self.db_path) as conn:
+            cur = conn.execute("""
+                SELECT 
+                    f.id, f.code,
+                    dep.code AS departure_airport,
+                    arr.code AS arrival_airport,
+                    a.capacity,
+                    COUNT(t.id) AS booked_seats,
+                    ROUND(CAST(COUNT(t.id) AS FLOAT) / a.capacity, 2) AS load_factor
+                FROM flight f
+                JOIN aircraft a ON f.aircraft_id = a.id
+                LEFT JOIN booking b ON f.id = b.flight_id
+                LEFT JOIN ticket t ON b.id = t.booking_id
+                JOIN airport dep ON f.departure_airport_id = dep.id
+                JOIN airport arr ON f.arrival_airport_id = arr.id
+                GROUP BY f.id, f.code, dep.code, arr.code, a.capacity
+                ORDER BY load_factor DESC
+                LIMIT ?
+            """, (limit,))
+            return [dict(
+                flight_id=row[0], flight_code=row[1],
+                departure=row[2], arrival=row[3],
+                capacity=row[4], booked_seats=row[5],
+                load_factor=row[6]
+            ) for row in cur.fetchall()]

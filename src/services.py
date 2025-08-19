@@ -1,8 +1,19 @@
+import os
+import hashlib
 from .dal import DAL
 
 class Services:
     def __init__(self, db_path="airline.db"):
         self.dal = DAL(db_path)
+
+    # ----------------------------
+    # Helper: password hashing
+    # ----------------------------
+    def _hash_password(self, password, salt=None):
+        if salt is None:
+            salt = os.urandom(16).hex()
+        pwd_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+        return pwd_hash, salt
 
     # ----------------------------
     # Passenger Services
@@ -110,21 +121,44 @@ class Services:
         return self.dal.delete_crew_assignment(assignment_id)
 
     # ----------------------------
-    # User Services
+    # User Services (secure)
     # ----------------------------
-
-    def add_user(self, username, password_hash, salt, role):
-            if role:
-                role = role.upper()
-            return self.dal.create_user(username, password_hash, salt, role)
+    def add_user(self, username, password, role):
+        pwd_hash, salt = self._hash_password(password)
+        if role:
+            role = role.upper()
+        return self.dal.create_user(username, pwd_hash, salt, role)
 
     def get_users(self):
-            return self.dal.list_users()
+        users = self.dal.list_users()
+        # Hide password hash + salt when returning
+        return [
+            {"id": u[0], "username": u[1], "role": u[4]}
+            for u in users
+        ]
 
-    def update_user(self, user_id, username=None, password_hash=None, salt=None, role=None):
-            if role:
-                role = role.upper()
-            return self.dal.update_user(user_id, username, password_hash, salt, role)
+    def update_user(self, user_id, username=None, password=None, role=None):
+        pwd_hash, salt = (None, None)
+        if password:
+            pwd_hash, salt = self._hash_password(password)
+        if role:
+            role = role.upper()
+        return self.dal.update_user(user_id, username, pwd_hash, salt, role)
 
     def delete_user(self, user_id):
-            return self.dal.delete_user(user_id)
+        return self.dal.delete_user(user_id)
+
+    # ----------------------------
+    # Reports (Advanced SQL)
+    # ----------------------------
+    def top_passengers(self, limit=5):
+        """Passengers ranked by number of bookings."""
+        return self.dal.query_top_passengers(limit)
+
+    def revenue_rankings(self, limit=5):
+        """Flights ranked by total revenue."""
+        return self.dal.query_revenue_rankings(limit)
+
+    def route_load(self, limit=5):
+        """Routes ranked by load factor (booked seats ÷ aircraft capacity)."""
+        return self.dal.query_route_load(limit)

@@ -151,7 +151,7 @@ def main():
     u.add_argument("--role", choices=["admin", "staff", "customer"], required=True)
     u.set_defaults(func=lambda args: print(
         "User created with id",
-        svc.add_user(args.username, args.password, "salt123", args.role)  # dummy salt
+        svc.add_user(args.username, args.password, args.role)
     ))
 
     u = subparsers.add_parser("list-users")
@@ -188,8 +188,6 @@ def main():
     upd.add_argument("--duty")
     upd.add_argument("--username")
     upd.add_argument("--password")
-
-    # ✅ Added these for assignment updates
     upd.add_argument("--crew-id", type=int)
     upd.add_argument("--flight-id", type=int)
 
@@ -221,7 +219,7 @@ def main():
                                               args.flight_id,
                                               args.duty))
         elif args.type == "user":
-            pprint(svc.update_user(args.id, args.username, args.password, "salt123", args.role))
+            pprint(svc.update_user(args.id, args.username, args.password, args.role))
     upd.set_defaults(func=do_update)
 
     # =========================================================
@@ -249,6 +247,18 @@ def main():
         print("Deleted:", mapping[args.type](args.id))
 
     d.set_defaults(func=do_delete)
+
+    # =========================================================
+    # REPORTS (Advanced SQL)
+    # =========================================================
+    tp = subparsers.add_parser("top-passengers")
+    tp.set_defaults(func=lambda args: pprint(svc.dal.top_passengers()))
+
+    rr = subparsers.add_parser("revenue-rankings")
+    rr.set_defaults(func=lambda args: pprint(svc.dal.revenue_rankings()))
+
+    lf = subparsers.add_parser("route-load-factors")
+    lf.set_defaults(func=lambda args: pprint(svc.dal.route_load_factors()))
 
     # =========================================================
     # Parse

@@ -2,20 +2,31 @@ import argparse
 from pprint import pprint
 from .services import Services
 import os
+import sys
 
 
 def main():
     # =========================================================
-    # Initialize Services with SQLite + Mongo
+    # Global parser setup
+    # =========================================================
+    parser = argparse.ArgumentParser(prog="airline-cli")
+    parser.add_argument(
+        "--role",
+        choices=["ADMIN", "STAFF", "CUSTOMER"],
+        default="CUSTOMER",
+        type=str.upper,  # normalize to uppercase
+        help="Role for this session (default=CUSTOMER)"
+    )
+
+    subparsers = parser.add_subparsers(dest="command")
+
+    # =========================================================
+    # Setup Mongo URI
     # =========================================================
     mongo_uri = os.getenv(
         "MONGO_URI",
         "mongodb+srv://maliksaqlain4785:hacker@cluster0.xisyedz.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
     )
-    svc = Services(mongo_uri=mongo_uri)
-
-    parser = argparse.ArgumentParser(prog="airline-cli")
-    subparsers = parser.add_subparsers(dest="command")
 
     # =========================================================
     # PASSENGER
@@ -23,13 +34,13 @@ def main():
     p = subparsers.add_parser("add-passenger")
     p.add_argument("--name", required=True)
     p.add_argument("--email", required=True)
-    p.set_defaults(func=lambda args: print(
+    p.set_defaults(func=lambda svc, args: print(
         "Passenger created with id",
         svc.add_passenger(args.name, args.email)
     ))
 
     p = subparsers.add_parser("list-passengers")
-    p.set_defaults(func=lambda args: pprint(svc.get_passengers()))
+    p.set_defaults(func=lambda svc, args: pprint(svc.get_passengers()))
 
     # =========================================================
     # AIRPORT
@@ -39,13 +50,13 @@ def main():
     a.add_argument("--name", required=True)
     a.add_argument("--city", required=True)
     a.add_argument("--country", required=True)
-    a.set_defaults(func=lambda args: print(
+    a.set_defaults(func=lambda svc, args: print(
         "Airport created with id",
         svc.add_airport(args.code, args.name, args.city, args.country)
     ))
 
     a = subparsers.add_parser("list-airports")
-    a.set_defaults(func=lambda args: pprint(svc.get_airports()))
+    a.set_defaults(func=lambda svc, args: pprint(svc.get_airports()))
 
     # =========================================================
     # AIRCRAFT
@@ -53,13 +64,13 @@ def main():
     ac = subparsers.add_parser("add-aircraft")
     ac.add_argument("--model", required=True)
     ac.add_argument("--capacity", type=int, required=True)
-    ac.set_defaults(func=lambda args: print(
+    ac.set_defaults(func=lambda svc, args: print(
         "Aircraft created with id",
         svc.add_aircraft(args.model, args.capacity)
     ))
 
     ac = subparsers.add_parser("list-aircraft")
-    ac.set_defaults(func=lambda args: pprint(svc.get_aircraft()))
+    ac.set_defaults(func=lambda svc, args: pprint(svc.get_aircraft()))
 
     # =========================================================
     # FLIGHT
@@ -72,7 +83,7 @@ def main():
     f.add_argument("--arrival", required=True)
     f.add_argument("--aircraft-id", type=int, required=True)
     f.add_argument("--price", type=float, required=True)
-    f.set_defaults(func=lambda args: print(
+    f.set_defaults(func=lambda svc, args: print(
         "Flight created with id",
         svc.add_flight(
             args.code, args.departure_airport, args.arrival_airport,
@@ -81,7 +92,7 @@ def main():
     ))
 
     f = subparsers.add_parser("list-flights")
-    f.set_defaults(func=lambda args: pprint(svc.get_flights()))
+    f.set_defaults(func=lambda svc, args: pprint(svc.get_flights()))
 
     # =========================================================
     # BOOKING
@@ -94,14 +105,14 @@ def main():
     b.add_argument("--price", type=float, required=True)
     b.add_argument("--seat", dest="seat_no", required=False,
                    help="Optional seat number (e.g. 12A)")
-    b.set_defaults(func=lambda args: print(
+    b.set_defaults(func=lambda svc, args: print(
         "Booking created with id",
         svc.book(args.passenger, args.flight,
                  args.ticket_class, args.price, args.seat_no)
     ))
 
     b = subparsers.add_parser("list-bookings")
-    b.set_defaults(func=lambda args: pprint(svc.get_bookings()))
+    b.set_defaults(func=lambda svc, args: pprint(svc.get_bookings()))
 
     # =========================================================
     # TICKET
@@ -112,14 +123,14 @@ def main():
     t.add_argument("--seat-no", required=True)
     t.add_argument("--class", dest="ticket_class",
                    choices=["ECONOMY", "BUSINESS", "FIRST"], required=True)
-    t.set_defaults(func=lambda args: print(
+    t.set_defaults(func=lambda svc, args: print(
         "Ticket created with id",
         svc.dal.create_ticket(args.booking_id, args.ticket_no,
                               args.seat_no, args.ticket_class)
     ))
 
     t = subparsers.add_parser("list-tickets")
-    t.set_defaults(func=lambda args: pprint(svc.dal.list_tickets()))
+    t.set_defaults(func=lambda svc, args: pprint(svc.dal.list_tickets()))
 
     # =========================================================
     # CREW MEMBER
@@ -127,13 +138,13 @@ def main():
     cm = subparsers.add_parser("add-crew")
     cm.add_argument("--name", required=True)
     cm.add_argument("--role", required=True)
-    cm.set_defaults(func=lambda args: print(
+    cm.set_defaults(func=lambda svc, args: print(
         "Crew member created with id",
         svc.add_crew_member(args.name, args.role)
     ))
 
     cm = subparsers.add_parser("list-crew")
-    cm.set_defaults(func=lambda args: pprint(svc.get_crew_members()))
+    cm.set_defaults(func=lambda svc, args: pprint(svc.get_crew_members()))
 
     # =========================================================
     # CREW ASSIGNMENT
@@ -142,13 +153,13 @@ def main():
     ca.add_argument("--crew-id", type=int, required=True)
     ca.add_argument("--flight-id", type=int, required=True)
     ca.add_argument("--duty", required=True)
-    ca.set_defaults(func=lambda args: print(
+    ca.set_defaults(func=lambda svc, args: print(
         "Crew assignment created with id",
         svc.assign_crew(args.crew_id, args.flight_id, args.duty)
     ))
 
     ca = subparsers.add_parser("list-assignments")
-    ca.set_defaults(func=lambda args: pprint(svc.get_crew_assignments()))
+    ca.set_defaults(func=lambda svc, args: pprint(svc.get_crew_assignments()))
 
     # =========================================================
     # USER
@@ -157,25 +168,25 @@ def main():
     u.add_argument("--username", required=True)
     u.add_argument("--password", required=True)
     u.add_argument("--role", choices=["admin", "staff", "customer"], required=True)
-    u.set_defaults(func=lambda args: print(
+    u.set_defaults(func=lambda svc, args: print(
         "User created with id",
         svc.add_user(args.username, args.password, args.role)
     ))
 
     u = subparsers.add_parser("list-users")
-    u.set_defaults(func=lambda args: pprint(svc.get_users()))
+    u.set_defaults(func=lambda svc, args: pprint(svc.get_users()))
 
     # =========================================================
     # REPORTS (Advanced SQL)
     # =========================================================
     tp = subparsers.add_parser("top-passengers")
-    tp.set_defaults(func=lambda args: pprint(svc.top_passengers()))
+    tp.set_defaults(func=lambda svc, args: pprint(svc.top_passengers()))
 
     rr = subparsers.add_parser("revenue-rankings")
-    rr.set_defaults(func=lambda args: pprint(svc.revenue_rankings()))
+    rr.set_defaults(func=lambda svc, args: pprint(svc.revenue_rankings()))
 
     lf = subparsers.add_parser("route-load-factors")
-    lf.set_defaults(func=lambda args: pprint(svc.route_load()))
+    lf.set_defaults(func=lambda svc, args: pprint(svc.route_load()))
 
     # =========================================================
     # MONGO (Hybrid NoSQL)
@@ -184,40 +195,50 @@ def main():
     lp.add_argument("--passenger-id", type=int, required=True)
     lp.add_argument("--tier", default="Bronze")
     lp.add_argument("--points", type=int, default=0)
-    lp.set_defaults(func=lambda args: pprint(
+    lp.set_defaults(func=lambda svc, args: pprint(
         svc.add_loyalty_profile(args.passenger_id, args.tier, args.points)
     ))
 
     lp = subparsers.add_parser("list-loyalty")
-    lp.set_defaults(func=lambda args: pprint(svc.get_loyalty_profiles()))
+    lp.set_defaults(func=lambda svc, args: pprint(svc.get_loyalty_profiles()))
 
     fb = subparsers.add_parser("add-feedback")
     fb.add_argument("--passenger-id", type=int, required=True)
     fb.add_argument("--comment", required=True)
-    fb.set_defaults(func=lambda args: pprint(
+    fb.set_defaults(func=lambda svc, args: pprint(
         svc.add_feedback(args.passenger_id, args.comment)
     ))
 
     up = subparsers.add_parser("update-loyalty")
     up.add_argument("--passenger-id", type=int, required=True)
     up.add_argument("--points", type=int, required=True)
-    up.set_defaults(func=lambda args: pprint(
+    up.set_defaults(func=lambda svc, args: pprint(
         svc.update_loyalty_points(args.passenger_id, args.points)
     ))
 
     dl = subparsers.add_parser("delete-loyalty")
     dl.add_argument("--passenger-id", type=int, required=True)
-    dl.set_defaults(func=lambda args: pprint(
+    dl.set_defaults(func=lambda svc, args: pprint(
         svc.delete_loyalty_profile(args.passenger_id)
     ))
-
 
     # =========================================================
     # Parse
     # =========================================================
     args = parser.parse_args()
+
+    # Initialize services with role
+    svc = Services(mongo_uri=mongo_uri, current_user_role=args.role)
+
     if hasattr(args, "func"):
-        args.func(args)
+        try:
+            args.func(svc, args)
+        except PermissionError as e:
+            print(f"Permission denied: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"Error: {e}")
+            sys.exit(1)
     else:
         parser.print_help()
 

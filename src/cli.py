@@ -1,10 +1,18 @@
 import argparse
 from pprint import pprint
 from .services import Services
+import os
 
 
 def main():
-    svc = Services()
+    # =========================================================
+    # Initialize Services with SQLite + Mongo
+    # =========================================================
+    mongo_uri = os.getenv(
+        "MONGO_URI",
+        "mongodb+srv://maliksaqlain4785:hacker@cluster0.xisyedz.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+    )
+    svc = Services(mongo_uri=mongo_uri)
 
     parser = argparse.ArgumentParser(prog="airline-cli")
     subparsers = parser.add_subparsers(dest="command")
@@ -158,107 +166,51 @@ def main():
     u.set_defaults(func=lambda args: pprint(svc.get_users()))
 
     # =========================================================
-    # UPDATE
-    # =========================================================
-    upd = subparsers.add_parser("update")
-    upd.add_argument("--type", choices=[
-        "passenger", "airport", "aircraft", "flight",
-        "booking", "ticket", "crew", "assignment", "user"
-    ], required=True)
-    upd.add_argument("--id", type=int, required=True)
-    upd.add_argument("--name")
-    upd.add_argument("--email")
-    upd.add_argument("--code")
-    upd.add_argument("--city")
-    upd.add_argument("--country")
-    upd.add_argument("--model")
-    upd.add_argument("--capacity", type=int)
-    upd.add_argument("--departure-airport", type=int)
-    upd.add_argument("--arrival-airport", type=int)
-    upd.add_argument("--departure")
-    upd.add_argument("--arrival")
-    upd.add_argument("--aircraft-id", type=int)
-    upd.add_argument("--price", type=float)
-    upd.add_argument("--status")
-    upd.add_argument("--seat-no")
-    upd.add_argument("--ticket-no")
-    upd.add_argument("--class", dest="ticket_class",
-                     choices=["ECONOMY", "BUSINESS", "FIRST"])
-    upd.add_argument("--role")
-    upd.add_argument("--duty")
-    upd.add_argument("--username")
-    upd.add_argument("--password")
-    upd.add_argument("--crew-id", type=int)
-    upd.add_argument("--flight-id", type=int)
-
-    def do_update(args):
-        if args.type == "passenger":
-            pprint(svc.update_passenger(args.id, args.name, args.email))
-        elif args.type == "airport":
-            pprint(svc.update_airport(args.id, args.code, args.name, args.city, args.country))
-        elif args.type == "aircraft":
-            pprint(svc.update_aircraft(args.id, args.model, args.capacity))
-        elif args.type == "flight":
-            pprint(svc.update_flight(args.id,
-                                     code=args.code,
-                                     departure_airport_id=args.departure_airport,
-                                     arrival_airport_id=args.arrival_airport,
-                                     departure_time=args.departure,
-                                     arrival_time=args.arrival,
-                                     aircraft_id=args.aircraft_id,
-                                     base_price=args.price))
-        elif args.type == "booking":
-            pprint(svc.update_booking(args.id, args.status, args.price))
-        elif args.type == "ticket":
-            pprint(svc.dal.update_ticket(args.id, args.ticket_no, args.seat_no, args.ticket_class))
-        elif args.type == "crew":
-            pprint(svc.update_crew_member(args.id, args.name, args.role))
-        elif args.type == "assignment":
-            pprint(svc.update_crew_assignment(args.id,
-                                              args.crew_id,
-                                              args.flight_id,
-                                              args.duty))
-        elif args.type == "user":
-            pprint(svc.update_user(args.id, args.username, args.password, args.role))
-    upd.set_defaults(func=do_update)
-
-    # =========================================================
-    # DELETE
-    # =========================================================
-    d = subparsers.add_parser("delete")
-    d.add_argument("--type", choices=[
-        "passenger", "airport", "aircraft", "flight",
-        "booking", "ticket", "crew", "assignment", "user"
-    ], required=True)
-    d.add_argument("--id", type=int, required=True)
-
-    def do_delete(args):
-        mapping = {
-            "passenger": svc.delete_passenger,
-            "airport": svc.delete_airport,
-            "aircraft": svc.delete_aircraft,
-            "flight": svc.delete_flight,
-            "booking": svc.cancel_booking,
-            "ticket": svc.dal.delete_ticket,
-            "crew": svc.delete_crew_member,
-            "assignment": svc.delete_crew_assignment,
-            "user": svc.delete_user,
-        }
-        print("Deleted:", mapping[args.type](args.id))
-
-    d.set_defaults(func=do_delete)
-
-    # =========================================================
     # REPORTS (Advanced SQL)
     # =========================================================
     tp = subparsers.add_parser("top-passengers")
-    tp.set_defaults(func=lambda args: pprint(svc.dal.top_passengers()))
+    tp.set_defaults(func=lambda args: pprint(svc.top_passengers()))
 
     rr = subparsers.add_parser("revenue-rankings")
-    rr.set_defaults(func=lambda args: pprint(svc.dal.revenue_rankings()))
+    rr.set_defaults(func=lambda args: pprint(svc.revenue_rankings()))
 
     lf = subparsers.add_parser("route-load-factors")
-    lf.set_defaults(func=lambda args: pprint(svc.dal.route_load_factors()))
+    lf.set_defaults(func=lambda args: pprint(svc.route_load()))
+
+    # =========================================================
+    # MONGO (Hybrid NoSQL)
+    # =========================================================
+    lp = subparsers.add_parser("add-loyalty")
+    lp.add_argument("--passenger-id", type=int, required=True)
+    lp.add_argument("--tier", default="Bronze")
+    lp.add_argument("--points", type=int, default=0)
+    lp.set_defaults(func=lambda args: pprint(
+        svc.add_loyalty_profile(args.passenger_id, args.tier, args.points)
+    ))
+
+    lp = subparsers.add_parser("list-loyalty")
+    lp.set_defaults(func=lambda args: pprint(svc.get_loyalty_profiles()))
+
+    fb = subparsers.add_parser("add-feedback")
+    fb.add_argument("--passenger-id", type=int, required=True)
+    fb.add_argument("--comment", required=True)
+    fb.set_defaults(func=lambda args: pprint(
+        svc.add_feedback(args.passenger_id, args.comment)
+    ))
+
+    up = subparsers.add_parser("update-loyalty")
+    up.add_argument("--passenger-id", type=int, required=True)
+    up.add_argument("--points", type=int, required=True)
+    up.set_defaults(func=lambda args: pprint(
+        svc.update_loyalty_points(args.passenger_id, args.points)
+    ))
+
+    dl = subparsers.add_parser("delete-loyalty")
+    dl.add_argument("--passenger-id", type=int, required=True)
+    dl.set_defaults(func=lambda args: pprint(
+        svc.delete_loyalty_profile(args.passenger_id)
+    ))
+
 
     # =========================================================
     # Parse

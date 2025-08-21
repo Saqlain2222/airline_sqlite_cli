@@ -1,10 +1,12 @@
 import os
 import hashlib
 from .dal import DAL
+from .mongo_dal import MongoDAL  # <-- for Mongo hybrid later
 
 class Services:
-    def __init__(self, db_path="airline.db"):
+    def __init__(self, db_path="airline.db", mongo_uri=None):
         self.dal = DAL(db_path)
+        self.mongo = MongoDAL(mongo_uri) if mongo_uri else None
 
     # ----------------------------
     # Helper: password hashing
@@ -131,11 +133,8 @@ class Services:
 
     def get_users(self):
         users = self.dal.list_users()
-        # Hide password hash + salt when returning
-        return [
-            {"id": u[0], "username": u[1], "role": u[4]}
-            for u in users
-        ]
+        # Ensure we don’t expose hashes
+        return [{"id": u[0], "username": u[1], "role": u[2]} for u in users]
 
     def update_user(self, user_id, username=None, password=None, role=None):
         pwd_hash, salt = (None, None)
@@ -162,3 +161,31 @@ class Services:
     def route_load(self, limit=5):
         """Routes ranked by load factor (booked seats ÷ aircraft capacity)."""
         return self.dal.query_route_load(limit)
+
+    # ----------------------------
+    # Loyalty (MongoDB)
+    # ----------------------------
+    def add_loyalty_profile(self, passenger_id, tier="Bronze", points=0):
+        if not self.mongo:
+            raise RuntimeError("MongoDB not configured")
+        return self.mongo.create_loyalty_profile(passenger_id, tier, points)
+
+    def get_loyalty_profiles(self):
+        if not self.mongo:
+            raise RuntimeError("MongoDB not configured")
+        return self.mongo.get_loyalty_profiles()
+
+    def add_feedback(self, passenger_id, comment):
+        if not self.mongo:
+            raise RuntimeError("MongoDB not configured")
+        return self.mongo.add_feedback(passenger_id, comment)
+
+    def update_loyalty_points(self, passenger_id, points):
+        if not self.mongo:
+            raise RuntimeError("MongoDB not configured")
+        return self.mongo.update_points(passenger_id, points)
+
+    def delete_loyalty_profile(self, passenger_id):
+        if not self.mongo:
+            raise RuntimeError("MongoDB not configured")
+        return self.mongo.delete_loyalty_profile(passenger_id)
